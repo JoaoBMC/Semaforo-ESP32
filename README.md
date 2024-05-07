@@ -46,7 +46,8 @@
     - Verde 30 Segundos
     - Amarelo 2 segundos
     - Vermelho 20 segundos
-- O contador deve está desligado caso nao seja acionado pelo pedestre## Esquemático
+- O contador deve está desligado caso nao seja acionado pelo pedestre
+## Esquemático
  
 ![Esquematico projeto PRJT-7](https://github.com/JoaoBMC/Semaforo-ESP32/assets/64325336/bbca8b85-76b6-4fe9-843d-d67d4960e66f)
 
