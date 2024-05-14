@@ -25,7 +25,7 @@
 #define DISPLAY_DG2_PIN 8
 
 // DEFINIÇÃO DE VARIÁVEIS CONSTANTES
-#define TARGET (1000 / 2)  // tempo de execução 1000ms (1 segundo)
+#define TARGET 1000000     // tempo de execução 100000us (1 segundo)
 #define RED_SV_TARGET 20   // segundos
 #define YELLOW_SV_TARGET 3 // segundos
 #define GREEN_SV_TARGET 30 // segundos
@@ -62,13 +62,16 @@ uint8_t cicly_counter = 0;
 uint8_t flag_traffic_light = GREEN_MODE;
 uint8_t display_counter = RED_SV_TARGET;
 bool flag_button_press = false;
-unsigned long run_timer = millis();
+// unsigned long run_timer = millis();
 unsigned long button_timer = millis();
+
+hw_timer_t *run_timer = NULL;
 
 void traffic_light(int status);
 void erase_SV_LEDs();
 void erase_SP_LEDs();
 void displayShow(int num = 8, int pos = DIGIT_POS_ALL);
+void IRAM_ATTR onTimer();
 
 void setup()
 {
@@ -95,41 +98,18 @@ void setup()
   pinMode(DISPLAY_F_PIN, OUTPUT);
   pinMode(DISPLAY_G_PIN, OUTPUT);
   pinMode(DISPLAY_DP_PIN, OUTPUT);
+
+  // pinMode(LED, OUTPUT);
+  run_timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(run_timer, &onTimer, true);
+  timerAlarmWrite(run_timer, TARGET, true);
+  timerAlarmEnable(run_timer);
 }
 
 void loop()
 {
+
   traffic_light(flag_traffic_light);
-
-  if (millis() - run_timer >= TARGET)
-  {
-    cicly_counter++;
-
-    if (flag_traffic_light == RED_MODE)
-    {
-      display_counter--;
-    }
-
-    if (flag_traffic_light == GREEN_MODE && cicly_counter >= GREEN_SV_TARGET)
-    {
-      flag_traffic_light = YELLOW_MODE;
-      cicly_counter = 0;
-    }
-    if (flag_traffic_light == YELLOW_MODE && cicly_counter >= YELLOW_SV_TARGET)
-    {
-      flag_traffic_light = RED_MODE;
-      cicly_counter = 0;
-    }
-    if (flag_traffic_light == RED_MODE && cicly_counter >= RED_SV_TARGET)
-    {
-      flag_traffic_light = GREEN_MODE;
-      display_counter = RED_SV_TARGET;
-      flag_button_press = false;
-      cicly_counter = 0;
-    }
-
-    run_timer = millis();
-  }
 
   if (digitalRead(BUTTON_SP_PIN) &&
       flag_button_press == false &&
@@ -143,6 +123,34 @@ void loop()
   {
     displayShow(display_counter / 10, DIGIT_POS_0);
     displayShow(display_counter % 10, DIGIT_POS_1);
+  }
+}
+
+void IRAM_ATTR onTimer()
+{
+  cicly_counter++;
+
+  if (flag_traffic_light == RED_MODE)
+  {
+    display_counter--;
+  }
+
+  if (flag_traffic_light == GREEN_MODE && cicly_counter >= GREEN_SV_TARGET)
+  {
+    flag_traffic_light = YELLOW_MODE;
+    cicly_counter = 0;
+  }
+  if (flag_traffic_light == YELLOW_MODE && cicly_counter >= YELLOW_SV_TARGET)
+  {
+    flag_traffic_light = RED_MODE;
+    cicly_counter = 0;
+  }
+  if (flag_traffic_light == RED_MODE && cicly_counter >= RED_SV_TARGET)
+  {
+    flag_traffic_light = GREEN_MODE;
+    display_counter = RED_SV_TARGET;
+    flag_button_press = false;
+    cicly_counter = 0;
   }
 }
 
@@ -181,8 +189,11 @@ void displayShow(int num, int pos)
     break;
 
   default:
+
     break;
   }
+
+  digitalWrite(DISPLAY_DG2_PIN, HIGH);
 }
 
 void traffic_light(int status)
