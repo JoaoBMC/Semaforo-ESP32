@@ -1,18 +1,18 @@
 #include <Arduino.h>
 
-// DEFINIÇÃO DOS PINOS DO SINAL DE VEICULOS (SV)
+// DEFINIÇÃO DOS PINOS DO SINAL DE VEÍCULOS (SV)
 #define RED_SV_PIN 15
 #define YELLOW_SV_PIN 2
 #define GREEN_SV_PIN 0
 
-// DEFINIÇÃO DE PINOS DO SINAL DE PEDESTRE (SP)
+// DEFINIÇÃO DE PINOS DO SINAL DE PEDESTRES (SP)
 #define RED_SP_PIN 16
 #define GREEN_SP_PIN 17
 
 // DEFINIÇÃO DO PINO DO BOTÃO
 #define BUTTON_SP_PIN 4
 
-// DEFINÇÃO DE PINOS DO DISPLAY DE 7 SEGUIMENTOS 2 DIGITOS
+// DEFINIÇÃO DE PINOS DO DISPLAY DE 7 SEGMENTOS 2 DIGITOS
 #define DISPLAY_A_PIN 5
 #define DISPLAY_B_PIN 18
 #define DISPLAY_C_PIN 19
@@ -24,26 +24,25 @@
 #define DISPLAY_DG1_PIN 7
 #define DISPLAY_DG2_PIN 8
 
-// DEFINIÇÃO DE VARIAVEIS CONSTANTES
-#define TARGET 1000        // tempo de execução 1000ms (1 segundo)
+// DEFINIÇÃO DE VARIÁVEIS CONSTANTES
+#define TARGET 1000000     // tempo de execução 100000us (1 segundo)
 #define RED_SV_TARGET 20   // segundos
 #define YELLOW_SV_TARGET 3 // segundos
 #define GREEN_SV_TARGET 30 // segundos
 #define BUTTON_TARGET 300
 
-int displayNumbers[10][8] = {
-    {1, 1, 1, 1, 1, 1, 0, 0}, // 0
-    {0, 1, 1, 0, 0, 0, 0, 0}, // 1
-    {1, 1, 0, 1, 1, 0, 1, 0}, // 2
-    {1, 1, 1, 1, 0, 0, 1, 0}, // 3
-    {0, 1, 1, 0, 0, 1, 1, 0}, // 4
-    {1, 0, 1, 1, 0, 1, 1, 0}, // 5
-    {1, 0, 1, 1, 1, 1, 1, 0}, // 6
-    {1, 1, 1, 0, 0, 0, 0, 0}, // 7
-    {1, 1, 1, 1, 1, 1, 1, 0}, // 8
-    {1, 1, 1, 1, 0, 1, 1, 0}, // 9
+u_int8_t displayNumbers[10] = {
+    0xFC, // 0
+    0x60, // 1
+    0xDA, // 2
+    0xF2, // 3
+    0x66, // 4
+    0xB6, // 5
+    0xBE, // 6
+    0xE0, // 7
+    0xFE, // 8
+    0xF6  // 9
 };
-
 enum
 {
   DIGIT_POS_0,
@@ -59,33 +58,36 @@ enum
   RED_MODE,
 };
 
-uint8_t cicly_conter = 0;
+uint8_t cicly_counter = 0;
 uint8_t flag_traffic_light = GREEN_MODE;
-uint8_t display_conter = RED_SV_TARGET;
+uint8_t display_counter = RED_SV_TARGET;
 bool flag_button_press = false;
-unsigned long run_timer = millis();
+// unsigned long run_timer = millis();
 unsigned long button_timer = millis();
+
+hw_timer_t *run_timer = NULL;
 
 void traffic_light(int status);
 void erase_SV_LEDs();
 void erase_SP_LEDs();
 void displayShow(int num = 8, int pos = DIGIT_POS_ALL);
+void IRAM_ATTR onTimer();
 
 void setup()
 {
-  // DECLARAÇAO DE PINOS DOS LEDs DO SINAL DE VEICULOS COMO SAIDA
+  // DECLARAÇÃO DE PINOS DOS LEDs DO SINAL DE VEÍCULOS COMO SAÍDA
   pinMode(RED_SV_PIN, OUTPUT);
   pinMode(YELLOW_SV_PIN, OUTPUT);
   pinMode(GREEN_SV_PIN, OUTPUT);
 
-  // DECLARAÇAO DE PINOS DOS LEDs DO SINAL DE PEDESTRES COMO SAIDA
+  // DECLARAÇÃO DE PINOS DOS LEDs DO SINAL DE PEDESTRES COMO SAÍDA
   pinMode(RED_SP_PIN, OUTPUT);
   pinMode(GREEN_SP_PIN, OUTPUT);
 
-  // DECLARAÇAO DE PINOS DO BOTÃO DO SINAL DE PEDESTRES COMO ENTRADA
+  // DECLARAÇÃO DE PINOS DO BOTÃO DO SINAL DE PEDESTRES COMO ENTRADA
   pinMode(BUTTON_SP_PIN, INPUT);
 
-  // DECLARAÇAO DE PINOS DO DISPLAY COMO SAIDA
+  // DECLARAÇÃO DE PINOS DO DISPLAY COMO SAÍDA
   pinMode(DISPLAY_DG1_PIN, OUTPUT);
   pinMode(DISPLAY_DG2_PIN, OUTPUT);
   pinMode(DISPLAY_A_PIN, OUTPUT);
@@ -96,41 +98,18 @@ void setup()
   pinMode(DISPLAY_F_PIN, OUTPUT);
   pinMode(DISPLAY_G_PIN, OUTPUT);
   pinMode(DISPLAY_DP_PIN, OUTPUT);
+
+  // pinMode(LED, OUTPUT);
+  run_timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(run_timer, &onTimer, true);
+  timerAlarmWrite(run_timer, TARGET, true);
+  timerAlarmEnable(run_timer);
 }
 
 void loop()
 {
+
   traffic_light(flag_traffic_light);
-
-  if (millis() - run_timer >= TARGET)
-  {
-    cicly_conter++;
-
-    if (flag_traffic_light == RED_MODE)
-    {
-      display_conter--;
-    }
-
-    if (flag_traffic_light == GREEN_MODE && cicly_conter >= GREEN_SV_TARGET)
-    {
-      flag_traffic_light = YELLOW_MODE;
-      cicly_conter = 0;
-    }
-    if (flag_traffic_light == YELLOW_MODE && cicly_conter >= YELLOW_SV_TARGET)
-    {
-      flag_traffic_light = RED_MODE;
-      cicly_conter = 0;
-    }
-    if (flag_traffic_light == RED_MODE && cicly_conter >= RED_SV_TARGET)
-    {
-      flag_traffic_light = GREEN_MODE;
-      display_conter = RED_SV_TARGET;
-      flag_button_press = false;
-      cicly_conter = 0;
-    }
-
-    run_timer = millis();
-  }
 
   if (digitalRead(BUTTON_SP_PIN) &&
       flag_button_press == false &&
@@ -138,14 +117,41 @@ void loop()
   {
     flag_traffic_light = YELLOW_MODE;
     flag_button_press = true;
-    cicly_conter = 0;
+    cicly_counter = 0;
   }
   if (flag_traffic_light != GREEN_MODE)
   {
-    displayShow(display_conter / 10, DIGIT_POS_0);
-    displayShow(display_conter % 10, DIGIT_POS_1);
+    displayShow(display_counter / 10, DIGIT_POS_0);
+    displayShow(display_counter % 10, DIGIT_POS_1);
   }
-  displayShow(RED_SV_TARGET, DIGIT_ALL_OFF);
+}
+
+void IRAM_ATTR onTimer()
+{
+  cicly_counter++;
+
+  if (flag_traffic_light == RED_MODE)
+  {
+    display_counter--;
+  }
+
+  if (flag_traffic_light == GREEN_MODE && cicly_counter >= GREEN_SV_TARGET)
+  {
+    flag_traffic_light = YELLOW_MODE;
+    cicly_counter = 0;
+  }
+  if (flag_traffic_light == YELLOW_MODE && cicly_counter >= YELLOW_SV_TARGET)
+  {
+    flag_traffic_light = RED_MODE;
+    cicly_counter = 0;
+  }
+  if (flag_traffic_light == RED_MODE && cicly_counter >= RED_SV_TARGET)
+  {
+    flag_traffic_light = GREEN_MODE;
+    display_counter = RED_SV_TARGET;
+    flag_button_press = false;
+    cicly_counter = 0;
+  }
 }
 
 void displayShow(int num, int pos)
@@ -153,14 +159,14 @@ void displayShow(int num, int pos)
   digitalWrite(DISPLAY_DG1_PIN, HIGH); // apaga o digito 1 do display
   digitalWrite(DISPLAY_DG2_PIN, HIGH); // apaga o digito 2 do display
 
-  digitalWrite(DISPLAY_A_PIN, displayNumbers[num][0]);
-  digitalWrite(DISPLAY_B_PIN, displayNumbers[num][1]);
-  digitalWrite(DISPLAY_C_PIN, displayNumbers[num][2]);
-  digitalWrite(DISPLAY_D_PIN, displayNumbers[num][3]);
-  digitalWrite(DISPLAY_E_PIN, displayNumbers[num][4]);
-  digitalWrite(DISPLAY_F_PIN, displayNumbers[num][5]);
-  digitalWrite(DISPLAY_G_PIN, displayNumbers[num][6]);
-  digitalWrite(DISPLAY_DP_PIN, displayNumbers[num][7]);
+  digitalWrite(DISPLAY_A_PIN, (displayNumbers[num] >> 7) & 0x1);
+  digitalWrite(DISPLAY_B_PIN, (displayNumbers[num] >> 6) & 0x1);
+  digitalWrite(DISPLAY_C_PIN, (displayNumbers[num] >> 5) & 0x1);
+  digitalWrite(DISPLAY_D_PIN, (displayNumbers[num] >> 4) & 0x1);
+  digitalWrite(DISPLAY_E_PIN, (displayNumbers[num] >> 3) & 0x1);
+  digitalWrite(DISPLAY_F_PIN, (displayNumbers[num] >> 2) & 0x1);
+  digitalWrite(DISPLAY_G_PIN, (displayNumbers[num] >> 1) & 0x1);
+  digitalWrite(DISPLAY_DP_PIN, (displayNumbers[num] >> 0) & 0x1);
 
   switch (pos)
   {
@@ -183,8 +189,11 @@ void displayShow(int num, int pos)
     break;
 
   default:
+
     break;
   }
+
+  digitalWrite(DISPLAY_DG2_PIN, HIGH);
 }
 
 void traffic_light(int status)
